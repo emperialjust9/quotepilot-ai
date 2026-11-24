@@ -1,0 +1,20 @@
+{
+  "name": "trmg-quotepilot-ai",
+  "version": "0.9.2-private-pilot-hardened",
+  "private": true,
+  "type": "module",
+  "description": "QuotePilot AI: authenticated lead capture, deterministic tenant pricing, estimate approval and internal follow-up drafts. Airtable is authoritative in connected mode.",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "demo": "QP_DATA_MODE=demo QP_ALLOW_DEMO=1 QP_SESSION_SECRET=demo-only-never-deploy-12345678901234567890 node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/server.mjs && node --check public/app.js && node --test test/*.test.mjs",
+    "hash-password": "node scripts/hash-password.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "1.2.0"
+  }
+}
