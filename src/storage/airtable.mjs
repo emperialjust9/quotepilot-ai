@@ -16,6 +16,23 @@ export function stagingTableMapFromEnv(env=process.env){
  if(Object.values(obj).some(id=>Object.values(PRODUCTION_TABLES).includes(id)))throw new Error('Production table ID cannot be used in staging');
  return Object.freeze({...obj});
 }
+// Tables added by the 2026-11-27 build. They are NOT part of the original
+// eight-table production map: a deployment creates them in its Airtable base
+// and supplies their IDs via QP_AIRTABLE_EXTRA_TABLES_JSON. Until then the
+// features that need them (self-serve accounts, upload metadata) stay off.
+export const OPTIONAL_TABLES=['Accounts','Uploads'];
+export function extraTableMapFromEnv(env=process.env){
+ const raw=env.QP_AIRTABLE_EXTRA_TABLES_JSON;
+ if(!raw)return null;
+ let obj;try{obj=JSON.parse(raw)}catch{throw new Error('Invalid extra table map JSON')}
+ if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error('Invalid extra table map');
+ for(const [name,id] of Object.entries(obj)){
+  if(!OPTIONAL_TABLES.includes(name))throw new Error(`Unknown extra table: ${name}`);
+  if(!/^tbl[A-Za-z0-9]{14}$/.test(id))throw new Error(`Invalid table ID for ${name}`);
+  if(Object.values(PRODUCTION_TABLES).includes(id))throw new Error('Extra table ID cannot reuse a production table ID');
+ }
+ return Object.freeze({...obj});
+}
 function formulaLiteral(s){return JSON.stringify(String(s));}
 export function scopedFormula(businessKey){return `{Business Key}=${formulaLiteral(businessKey)}`;}
 export class AirtableRepo {
@@ -31,4 +48,8 @@ export class AirtableRepo {
  async get(table,businessKey,id){if(!/^rec[A-Za-z0-9]{14}$/.test(id))throw new HttpError(404,'Record not found');const r=await this.request(table,'GET','/'+encodeURIComponent(id));if(r.fields?.['Business Key']!==businessKey)throw new HttpError(404,'Record not found');return r;}
  async create(table,businessKey,fields){const result=await this.request(table,'POST','',{}, {records:[{fields:{...fields,'Business Key':businessKey}}],typecast:false});if(!result.records?.[0])throw new HttpError(503,'Database did not confirm save');return result.records[0];}
  async update(table,businessKey,id,fields){await this.get(table,businessKey,id);const result=await this.request(table,'PATCH','',{}, {records:[{id,fields:{...fields,'Business Key':businessKey}}],typecast:false});if(!result.records?.[0])throw new HttpError(503,'Database did not confirm update');return result.records[0];}
+ // Auth-directory lookup across the base (email / one-time tokens are global
+ // login identifiers). Returns null when the Accounts table is not configured
+ // in this deployment — the account features then stay off, fail-closed.
+ async findAccount(field,value){if(!this.tables.Accounts)return null;if(!['Email','Verify Token Hash','Reset Token Hash'].includes(field))throw new HttpError(400,'Account lookup field not allowed');const res=await this.request('Accounts','GET','',{pageSize:'1',filterByFormula:`{${field}}=${formulaLiteral(value)}`});const r=(res.records||[])[0];return r&&r.fields?.[field]===value?r:null;}
 }

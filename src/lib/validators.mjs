@@ -24,14 +24,30 @@ export function area(v){return quantity(v,'Square Feet',100,20000);}
 export function postal(v){const s=requiredString(v,'ZIP',10);if(!/^\d{5}(?:-\d{4})?$/.test(s))throw new HttpError(400,'ZIP must be a valid US ZIP code');return s;}
 export function isoDate(v){const s=requiredString(v,'Date',10);if (!/^\d{4}-\d{2}-\d{2}$/.test(s)||Number.isNaN(Date.parse(s+'T12:00:00Z')) || new Date(s+'T12:00:00Z').toISOString().slice(0,10)!==s)throw new HttpError(400,'Date must be YYYY-MM-DD');return s;}
 export function bool(v){return v===true;}
-export function leadInput(input) {
+// The built-in catalog every tenant starts with. Tenants may replace it with
+// their own catalog (Businesses > 'Services Offered'); validation always runs
+// against the tenant's effective catalog, never a global hard-coded list.
+export const DEFAULT_SERVICES=['Standard Clean','Deep Clean','Move-In/Out'];
+export function parseServiceCatalog(raw){
+  if(typeof raw!=='string'||!raw.trim())return [...DEFAULT_SERVICES];
+  const names=[...new Set(raw.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean))];
+  if(!names.length||names.length>25||names.some(s=>s.length>80))return [...DEFAULT_SERVICES];
+  return names;
+}
+export function serviceCatalogInput(input){
+  const obj=input&&typeof input==='object'?input:{};
+  if(!Array.isArray(obj.services)||!obj.services.length||obj.services.length>25)throw new HttpError(400,'Services must be a list of 1-25 service names');
+  const names=[...new Set(obj.services.map(s=>requiredString(s,'Service name',80)))];
+  return names;
+}
+export function leadInput(input,services=DEFAULT_SERVICES) {
   const obj=input&&typeof input==='object'?input:{};
   const name=requiredString(obj.name,'Customer name',120);
   const email=optionalEmail(obj.email);
   const phone=optionalString(obj.phone,'Phone',35);
   if (!email&&!phone) throw new HttpError(400,'Provide email or phone');
   const service=requiredString(obj.service,'Service',80);
-  if (!['Standard Clean','Deep Clean','Move-In/Out'].includes(service)) throw new HttpError(400,'Unsupported service');
+  if (!services.includes(service)) throw new HttpError(400,'Unsupported service');
   return {
     'Customer Name':name,'Customer Email':email,'Customer Phone':phone,'Service':service,
     'Bedrooms':quantity(obj.bedrooms,'Bedrooms',0,30),'Bathrooms':quantity(obj.bathrooms,'Bathrooms',0,30),
@@ -44,4 +60,4 @@ export function leadInput(input) {
 }
 
 export function safeCurrency(v,field,max=10000){const n=Number(v);if(typeof v==='boolean'||!Number.isFinite(n)||n<0||n>max||!/^\d+(?:\.\d{1,2})?$/.test(String(v)))throw new HttpError(400,`${field} must be a nonnegative monetary amount (max ${max})`);return n;}
-export function pricingInput(input){const obj=input&&typeof input==='object'?input:{};const service=requiredString(obj.service,'Service',80);if(!['Standard Clean','Deep Clean','Move-In/Out'].includes(service))throw new HttpError(400,'Unsupported pricing service');const multiplier=Number(obj.multiplier||1);if(!Number.isFinite(multiplier)||multiplier<0.25||multiplier>5)throw new HttpError(400,'Multiplier must be 0.25-5');return {'Service':service,'Base Price':safeCurrency(obj.base,'Base'),'Per Bedroom':safeCurrency(obj.perBedroom,'Bedroom rate'),'Per Bathroom':safeCurrency(obj.perBathroom,'Bathroom rate'),'Per 1000 Sq Ft':safeCurrency(obj.per1000,'Area rate'),'Minimum Price':safeCurrency(obj.minimum,'Minimum'),'Flat Addon':safeCurrency(obj.flatAddon??0,'Addon'),'Multiplier':multiplier};}
+export function pricingInput(input,services=DEFAULT_SERVICES){const obj=input&&typeof input==='object'?input:{};const service=requiredString(obj.service,'Service',80);if(!services.includes(service))throw new HttpError(400,'Unsupported pricing service');const multiplier=Number(obj.multiplier||1);if(!Number.isFinite(multiplier)||multiplier<0.25||multiplier>5)throw new HttpError(400,'Multiplier must be 0.25-5');return {'Service':service,'Base Price':safeCurrency(obj.base,'Base'),'Per Bedroom':safeCurrency(obj.perBedroom,'Bedroom rate'),'Per Bathroom':safeCurrency(obj.perBathroom,'Bathroom rate'),'Per 1000 Sq Ft':safeCurrency(obj.per1000,'Area rate'),'Minimum Price':safeCurrency(obj.minimum,'Minimum'),'Flat Addon':safeCurrency(obj.flatAddon??0,'Addon'),'Multiplier':multiplier};}
