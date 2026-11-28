@@ -45,6 +45,10 @@ async function restore(){
  try { r=await api('/api/me'); }
  catch(err){user=null;csrf='';$('#login').hidden=false;$('#shell').hidden=true;text($('#loginErr'),err.message==='Authentication required'?'':(err.message||'Unable to restore your session'));return false;}
  user=r;csrf=r.csrf;
+ const gates=r.gates||{};
+ const setGate=(id,on)=>{const el=document.getElementById(id);if(el){el.textContent=on?'ENABLED':'DISABLED';el.classList.toggle('hold',!on);}};
+ setGate('gateMessaging',gates.outbound);setGate('gateCheckout',gates.checkout);setGate('gateBooking',gates.automatedBookings);
+ try{const svc=await api('/api/services');document.querySelectorAll('select.service-select').forEach(sel=>{const cur=sel.value;sel.innerHTML=svc.services.map(s=>`<option>${esc(s)}</option>`).join('');if(svc.services.includes(cur))sel.value=cur;});}catch{/* keep the built-in defaults */}
  $('#login').hidden=true;$('#shell').hidden=false;
  text($('#loginErr'),'');text($('#tenantName'),`${user.businessKey} · ${user.role}`);
  nav('overview');
